@@ -1,0 +1,14 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+*.log
+.DS_Store
+
+# Session material and personal exports (never commit)
+token.json
+session.json
+cookies.json
+*.pdf
+*.har
+private/
