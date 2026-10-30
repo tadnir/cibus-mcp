@@ -18,6 +18,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { randomBytes } from "node:crypto";
 import { PluxeeApi, Unauthorized, type Fetch } from "./api.js";
 import { SessionKeeper, SessionRefused, SignInRequired, type KeeperStatus } from "./keeper.js";
+import { dueForRenewal, renewToken, type RenewResult } from "./renew.js";
 import { CibusLoginError, SecondInputRequired, openChromium, sendCode, verifyCode, type Identity, type LoginBrowser, type OpenBrowser } from "./login.js";
 import { DEFAULT_LENGTH, PAGE_HEADERS, codePage, idPage, lengthMs, messagePage, statusPage, workingPage, type IdFormValues } from "./pages.js";
 import { fileStore, type SessionStore } from "./store.js";
@@ -66,6 +67,7 @@ export class SessionManager {
   readonly #host: string;
   readonly #port: number;
   readonly #fixedUrl: string | undefined;
+  readonly #fetch: Fetch;
   #server: Promise<string> | undefined;
   #http: Server | undefined;
   #pending: Pending | undefined;
@@ -80,6 +82,7 @@ export class SessionManager {
     this.#host = options.host ?? (process.env.CIBUS_LOGIN_HOST || "127.0.0.1");
     this.#port = options.port ?? Number(process.env.CIBUS_LOGIN_PORT || 8768);
     this.#fixedUrl = options.url ?? (process.env.CIBUS_LOGIN_URL || undefined);
+    this.#fetch = options.fetch ?? fetch;
     this.keeper = new SessionKeeper({ store: options.store ?? fileStore(), ...(options.tickMs ? { tickMs: options.tickMs } : {}) });
     this.api = new PluxeeApi(
       () => this.#jar(),
@@ -89,6 +92,7 @@ export class SessionManager {
     this.keeper.check = async () => {
       try {
         await this.api.ping();
+        if (dueForRenewal(await this.keeper.jar())) await this.renew();
       } catch (err) {
         if (err instanceof Unauthorized || err instanceof SignInRequired) throw new SessionRefused();
         throw err;
@@ -105,6 +109,15 @@ export class SessionManager {
     this.keeper.stop();
     this.#http?.close();
     void this.#dropPending();
+  }
+
+  /** Asks Pluxee for a fresh token, and saves it when it gives one. */
+  async renew(): Promise<RenewResult> {
+    const jar = await this.#jar();
+    const result = await renewToken(jar, this.#fetch);
+    await this.keeper.cookiesChanged();
+    this.keeper.renewed(result);
+    return result;
   }
 
   /** Starts the sign-in page if it is not up yet and returns its link. */
