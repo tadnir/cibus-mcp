@@ -72,6 +72,11 @@ function inputSchema(schema: z.ZodObject<z.ZodRawShape>): Tool["inputSchema"] {
 const TOOLS: { name: string; description: string; schema: z.ZodObject<z.ZodRawShape> }[] = [
   { name: "cibus_login", description: "Get the link where the user signs in to Cibus (email or mobile number and a one-time code are typed on that page, never in the chat). Returns the status when already signed in.", schema: schemas.empty },
   { name: "cibus_session_status", description: "Whether this server is signed in to Cibus, since when, until when, and the sign-in link when it is not.", schema: schemas.empty },
+  {
+    name: "cibus_renew_session",
+    description: "Renew the Cibus session's 24-hour token now, as the keep-alive does when it is close to expiring. Reports what Pluxee answered to each try, never token values.",
+    schema: schemas.empty,
+  },
   { name: "cibus_logout", description: "Sign out of Cibus here: end the session and forget it.", schema: schemas.empty },
   { name: "get_balance", description: "The card's balance now (the sum of its budgets, as the Cibus app shows it), and the budgets it is made of.", schema: schemas.empty },
   { name: "list_orders", description: "Orders and charges on the card between two days, newest first, with each voucher's code (voucher_code).", schema: schemas.orders },
@@ -121,6 +126,8 @@ export function createMcpServer(session: SessionManager): Server {
       }
       case "cibus_session_status":
         return session.status();
+      case "cibus_renew_session":
+        return session.renew();
       case "cibus_logout":
         if (session.keeper.status().state === "signed_in") await api.logout().catch(() => undefined);
         await session.keeper.signOut();

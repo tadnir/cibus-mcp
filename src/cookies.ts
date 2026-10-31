@@ -1,7 +1,7 @@
 /**
  * The Pluxee session is a set of cookies (the main one is called "token") that
  * both of its APIs, api.consumers.pluxee.co.il and api.capir.pluxee.co.il,
- * read. There is no bearer or refresh token. This jar holds them between calls
+ * read. The web app has no refresh token (see renew.ts). This jar holds them between calls
  * and restarts: it sends them with every API call and takes any the APIs set
  * in return.
  */
@@ -33,6 +33,11 @@ export class CookieJar {
 
   list(): Cookie[] {
     return [...this.#cookies.values()];
+  }
+
+  /** Holds a cookie Pluxee handed back some other way than Set-Cookie. */
+  set(cookie: Cookie): void {
+    this.#cookies.set(cookie.name, cookie);
   }
 
   get size(): number {

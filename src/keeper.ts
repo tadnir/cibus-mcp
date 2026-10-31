@@ -1,13 +1,15 @@
 import { CookieJar, type Cookie } from "./cookies.js";
+import type { RenewResult } from "./renew.js";
 import type { SavedSession, SessionStore } from "./store.js";
 
 /**
  * Keeps one Pluxee sign-in for as long as Pluxee allows.
  *
- * Pluxee has no refresh token. The keeper checks the session every few
- * minutes with a small data call, saves any cookies Pluxee sets so a restart
- * picks them up, and drops the session once Pluxee refuses it, or at the
- * latest by the length picked at sign-in. Then a person has to sign in again.
+ * The keeper checks the session every few minutes with a small data call,
+ * renews Pluxee's 24-hour token when it is close to expiring (renew.ts),
+ * saves any cookies Pluxee sets so a restart picks them up, and drops the
+ * session once Pluxee refuses it, or at the latest by the length picked at
+ * sign-in. Then a person has to sign in again.
  */
 
 export type KeeperState = "signed_out" | "signed_in" | "expired";
@@ -21,6 +23,8 @@ export interface KeeperStatus {
   lastError?: string;
   /** When Pluxee last set a cookie (a sign it extended the session); never values. */
   lastRenewedAt?: string;
+  /** The last renewal of the token: what each try got, never values. */
+  lastRenewal?: RenewResult;
   /** The session's cookie names and when each expires, never their values. */
   cookies?: { name: string; expiresAt?: string }[];
 }
@@ -150,6 +154,12 @@ export class SessionKeeper {
     return this.#jar;
   }
 
+  /** Keeps what the last renewal got, for the status. */
+  renewed(result: RenewResult): void {
+    this.#status = { ...this.#status, lastRenewal: result };
+    this.#log(result.renewed ? `renewed the token until ${result.tokenExpiresAt}` : `could not renew the token: ${JSON.stringify(result.attempts)}`);
+  }
+
   /** Pluxee set new cookies: save them so a restart has them. */
   async cookiesChanged(): Promise<void> {
     await this.#serial(async () => {
@@ -178,7 +188,7 @@ export class SessionKeeper {
   async #drop(reason: string): Promise<void> {
     if (!this.#session) return;
     const { signedInAt } = this.#session;
-    const { lastCheckedAt, lastRenewedAt } = this.#status;
+    const { lastCheckedAt, lastRenewedAt, lastRenewal } = this.#status;
     const cookies = this.#jar ? cookieSummary(this.#jar.list()) : undefined;
     this.#session = undefined;
     this.#jar = undefined;
@@ -191,6 +201,7 @@ export class SessionKeeper {
       lastError: reason,
       ...(lastCheckedAt ? { lastCheckedAt } : {}),
       ...(lastRenewedAt ? { lastRenewedAt } : {}),
+      ...(lastRenewal ? { lastRenewal } : {}),
       ...(cookies ? { cookies } : {}),
     };
     this.#log(reason === LENGTH_ENDED ? "the session reached its time limit; signed out" : `Pluxee ended the session: ${reason}`);

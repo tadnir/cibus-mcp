@@ -53,6 +53,8 @@ Pluxee protects its sign-in with reCAPTCHA v3, which only its own page can run, 
 
 While the MCP server runs it checks the session every 10 minutes with a small data call, saves any cookies Pluxee renews, and shows the session as ended as soon as Pluxee refuses it. It also drops the session at the length you picked. A restart picks the saved session back up.
 
+Pluxee's session token lasts 24 hours from the sign-in, and no call the website makes extends it. When less than 3 hours are left, the server asks Pluxee for a fresh one through `auth/exchangeToken`, the call Pluxee's Android app makes for this. That request isn't documented, so the server tries the likely shapes in turn. `cibus_session_status` shows what each try got under `lastRenewal`, without any token values, and `cibus_renew_session` runs a renewal straight away.
+
 ### Tools
 
 | Tool | What it does |
@@ -66,6 +68,7 @@ While the MCP server runs it checks the session every 10 minutes with a small da
 | `list_voucher_shops` | The stores that sell vouchers (gift cards) for the card |
 | `buy_voucher` | **Get a code:** quotes one voucher (it goes in your Cibus cart, nothing is charged), then, called again with the quote's `confirm_token`, buys it and returns its code |
 | `cibus_login`, `cibus_session_status`, `cibus_logout` | The sign-in link, whether a session is live and until when, and sign-out |
+| `cibus_renew_session` | Renews the session's 24-hour token now, and reports what Pluxee answered |
 
 `buy_voucher` leaves a cart that holds something else alone, unless it is called with `clear_cart` set to `true`. It can't buy items that have options to pick, or the variable-amount Cibus voucher. Use the Cibus app for those.
 
